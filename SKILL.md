@@ -176,7 +176,32 @@ Scrape supplier agencies from `store.weixin.qq.com/shop/ec-agency/market/home`. 
 
 ---
 
-## Section C: 合作管理 (Cooperation Management)
+## Section C: 商品列表 (Goods List)
+
+Scrape all products from `store.weixin.qq.com/shop/goods/list`. Uses direct API call (`scanProductPreview`) with session auth — no browser needed once `biz_magic` is extracted from storage_state.
+
+**Key characteristics:**
+- API URL: `POST .../mmchannelstradeproductcore/cgi/goods/scanProductPreview?token=&lang=zh_CN`
+- Auth via `biz_magic` header (from cookie in `weixin_store_state.json`)
+- Pagination with `pageSize=20` (max), `pageNum` iteration
+- Returns ~80 fields per product (title, price, stock, SKUs, images, params, etc.)
+- 21-column Excel output: 商品ID, SPU编码, 商品名称, 副标题, 价格(元), 最高价(元), 总库存, 总销量, 总订单数, 总曝光量, 状态, 子状态, 上架时间, 编辑时间, 品牌, SKU数, 商品类型, 类目ID, 发货方式, 主图, 销售渠道
+
+**Recommended template:** `templates/goods-list/scrape_goods_list.py`
+
+### Reference Files
+
+| File | Contents |
+|------|----------|
+| `references/goods-list/api-reference.md` | API endpoint, auth mechanism, request/response schema |
+
+### Template Files
+
+| File | Contents |
+|------|----------|
+| `templates/goods-list/scrape_goods_list.py` | Full scraper: paginate API + save JSON + Excel |
+
+## Section D: 合作管理 (Cooperation Management)
 
 Export promoter/agency lists from `store.weixin.qq.com/shop/shopleague/coop-manage`. Uses native export buttons (ZIP/CSV download) — not DOM scraping.
 
