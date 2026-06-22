@@ -3,16 +3,48 @@
 调用 scanProductPreview API 获取全部商品信息
 输出: JSON + Excel 到桌面
 
-用法: python3 goods_list.py
+跨平台兼容: macOS / Windows / Linux
+用法: python3 scrape_goods_list.py
 """
 
-import os, json, requests, time, tempfile
+import os, json, requests, time, tempfile, sys
 from collections import Counter
+
+# ═══ 跨平台路径工具 ═══
+
+def get_temp_file(filename):
+    """跨平台临时文件路径"""
+    return os.path.join(tempfile.gettempdir(), filename)
+
+def get_desktop_path(sub_dir=None):
+    """跨平台桌面路径 (macOS/Windows/Linux)"""
+    home = os.path.expanduser("~")
+    if sys.platform == 'darwin':  # macOS
+        base = os.path.join(home, "Desktop")
+    elif sys.platform == 'win32':  # Windows
+        base = os.path.join(home, "Desktop")
+    else:  # Linux (XDG约定)
+        base = os.environ.get('XDG_DESKTOP_DIR',
+                              os.path.join(home, "Desktop"))
+    if not os.path.exists(base):
+        base = home  # 回退到用户目录
+    return os.path.join(base, sub_dir) if sub_dir else base
+
+def get_platform_ua():
+    """跨平台 User-Agent"""
+    if sys.platform == 'darwin':
+        return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+    elif sys.platform == 'win32':
+        return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    else:
+        return 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
+
+# ═══ 配置 ═══
 
 SKILL_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_PATH = os.path.join(SKILL_DIR, '..', '..', 'assets', 'weixin_store_state.json')
-OUT_DIR = os.path.join(os.path.expanduser("~"), "Desktop", "微信小店商品数据")
-TEMP_JSON = os.path.join(tempfile.gettempdir(), "weixin_goods_data.json")
+OUT_DIR = get_desktop_path("微信小店商品数据")
+TEMP_JSON = get_temp_file("weixin_goods_data.json")
 os.makedirs(OUT_DIR, exist_ok=True)
 
 API_URL = "https://store.weixin.qq.com/shop-faas/mmchannelstradeproductcore/cgi/goods/scanProductPreview?token=&lang=zh_CN"
@@ -32,7 +64,7 @@ def get_auth_headers():
     biz_magic = cookies.get('biz_magic', '')
     return {
         'Cookie': '; '.join(f'{k}={v}' for k, v in cookies.items()),
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'User-Agent': get_platform_ua(),
         'Content-Type': 'application/json',
         'Origin': 'https://store.weixin.qq.com',
         'Referer': 'https://store.weixin.qq.com/shop/goods/list',
@@ -59,6 +91,7 @@ def fetch_all_products(headers):
         data = resp.json()
         products = data.get('productList', [])
         if not products:
+            print(f"  ❌ 第{page}页: 无响应数据", flush=True)
             break
         all_products.extend(products)
         print(f"  第{page}页: +{len(products)} 条 (共{len(all_products)})", flush=True)
@@ -135,10 +168,18 @@ def save_excel(products, fp):
 
 
 def main():
+    print(f"平台: {sys.platform}", flush=True)
     print("加载登录态...", flush=True)
+    if not os.path.exists(STATE_PATH):
+        print(f"❌ 未找到登录态文件: {STATE_PATH}")
+        print("   请先在微信小店扫码登录并生成 storage_state")
+        return
     headers = get_auth_headers()
     print("开始采集全部商品...", flush=True)
     products = fetch_all_products(headers)
+    if not products:
+        print("❌ 未采集到任何商品，请检查登录态是否过期", flush=True)
+        return
     print(f"\n✅ 共采集 {len(products)} 件商品", flush=True)
 
     # JSON 备份
