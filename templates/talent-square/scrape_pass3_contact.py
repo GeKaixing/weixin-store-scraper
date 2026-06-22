@@ -139,6 +139,16 @@ async def main():
         talents = json.load(f)
     print(f"加载 {len(talents)} 条达人数据", flush=True)
 
+    # ⚠️ 运行前检查：如果大量条目不筛选就跑 PASS3 会失败
+    has_roomid = [t for t in talents if t.get('roomId') and not t.get('微信号') and not t.get('手机号')]
+    if has_roomid:
+        total_with_contact = sum(1 for t in talents if t.get('微信号') or t.get('手机号'))
+        if total_with_contact == 0 and len(has_roomid) > 5:
+            print(f"⚠️  警告: 检测到 {len(has_roomid)} 条待提取但均无联系方式。")
+            print(f"   如果 PASS1 未设置 FILTER_HAS_CONTACT = True，")
+            print(f"   PASS3 可能大量显示"暂无联系方式"。建议取消重跑 →")
+            print(f"   编辑 scrape_v11_onepass.py 设置 FILTER_HAS_CONTACT = True 后重新运行\n", flush=True)
+
     # 加载已有联系方式进度
     done = {}
     if os.path.exists(CONTACT_JSON):

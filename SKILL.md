@@ -286,3 +286,5 @@ Export promoter/agency lists from `store.weixin.qq.com/shop/shopleague/coop-mana
 24. **PASS1必须筛选有联系方式才能保证PASS3全部提取成功** — 如果 PASS1 不勾选 `FILTER_HAS_CONTACT`，采集的所有达人在 PASS3 中会有大量"暂无联系方式"。正确流程: PASS1 勾选 `FILTER_HAS_CONTACT = True` 只采集已公开联系方式的达人 → PASS2 点击"联系"按钮捕获 roomId → PASS3 打开 collab/im 提取微信号+手机号。此时 PASS3 应 100% 成功，不再出现"暂无联系方式"。
 25. **EPIPE 崩溃 + 增量保存** — Python 3.9 + Playwright 在连续打开大量页面后(约16页)会触发 Node.js EPIPE 崩溃。两个模板均已添加: (a) `page.close()` 每个页面处理完立刻关闭; (b) 每条数据增量保存到 TEMP_JSON，崩溃后重新运行可从已有 roomId 继续。
 26. **商品列表 API 需要 biz_magic 请求头** — 不同于达人广场/机构广场的 Playwright 驱动方式，商品列表 (`scanProductPreview`) 使用 requests 直接调用 API。认证依赖 `biz_magic` 请求头（值从 `weixin_store_state.json` 的 cookies 中提取。尝试用 `page.request.post()` 或裸 `fetch` 不带 `biz_magic` 头会返回 403 `"biz magic invalid"`。修复：从 storage_state cookies 中取 `biz_magic` 值，加到 headers 字典中。
+27. **PASS3 运行前检查** — `scrape_pass3_contact.py` 启动时会自动检测 TEMP_JSON 中待提取条数 >5 且已有联系方式为 0 的情况，命中时打印警告提示用户可能忘记设置 `FILTER_HAS_CONTACT = True`。软检查不影响执行流程。
+28. **跨平台函数用于所有模板** — `get_desktop_path()`、`get_temp_file()`、`get_platform_ua()` 三个交叉平台辅助函数已在 SKILL.md 中定义。`scrape_goods_list.py` 使用了全部三个（纯 API 调用需要 UA），Playwright 模板通常只需要前两个。新建模板时应优先引用这些函数。

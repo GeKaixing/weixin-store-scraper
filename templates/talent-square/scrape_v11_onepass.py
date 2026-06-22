@@ -44,7 +44,7 @@ ALL_CATEGORIES = [
 CAT_LABEL = "保健食品/膳食营养补充食品"
 CAT_ID = 10000508
 MAX_PAGES = 0  # 测试用 = 2, 全量 = 0 (爬全部)
-FILTER_HAS_CONTACT = False  # 是否只爬有联系方式的达人
+FILTER_HAS_CONTACT = True  # 是否只爬有联系方式的达人（强烈建议为True，否则PASS3大量失败）
 # ═════════════════
 
 PAGINATION_INPUT_SEL = "input.weui-desktop-pagination__input"
