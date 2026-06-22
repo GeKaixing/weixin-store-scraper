@@ -167,25 +167,24 @@ async def main():
         ctx = await browser.new_context(storage_state=STATE_PATH, viewport={"width":1920, "height":1080})
 
         for idx, t in enumerate(to_process):
-            wechat, phone, skip = await extract_contact(
-                await ctx.new_page(), t['roomId'], t.get('昵称', '')
-            )
+            page = await ctx.new_page()
+            try:
+                wechat, phone, skip = await extract_contact(
+                    page, t['roomId'], t.get('昵称', '')
+                )
+            finally:
+                await page.close()
             if skip:
-                # 已达上限，下次再跑
                 continue
             t['微信号'] = wechat
             t['手机号'] = phone
 
-            # 保存进度
+            # 增量保存进度: 每条立刻写入 TEMP_JSON + CONTACT_JSON
             done[t.get('昵称', '')] = {'微信号': wechat, '手机号': phone}
             with open(CONTACT_JSON, 'w') as f:
                 json.dump(done, f, ensure_ascii=False)
-
-            # 更新原始数据
-            for d in talents:
-                if d.get('昵称') == t.get('昵称'):
-                    d['微信号'] = wechat
-                    d['手机号'] = phone
+            with open(TEMP_JSON, 'w') as f:
+                json.dump(talents, f, ensure_ascii=False)
 
         await browser.close()
 

@@ -32,7 +32,7 @@ ALL_CATEGORIES = [
 # ═══ 修改这里 ═══
 CAT_LABEL = "保健食品/膳食营养补充食品"
 CAT_ID = 10000508
-MAX_PAGES = 2  # 测试用 = 2, 全量 = 0 (爬全部)
+MAX_PAGES = 0  # 测试用 = 2, 全量 = 0 (爬全部)
 FILTER_HAS_CONTACT = False  # 是否只爬有联系方式的达人
 # ═════════════════
 
@@ -408,10 +408,15 @@ async def pass2():
         ctx = await browser.new_context(storage_state=STATE_PATH, viewport={"width":1920,"height":1080})
         for idx, (orig_idx, url) in enumerate(urls):
             full_url = url if url.startswith('http') else 'https://store.weixin.qq.com' + url
+            dp = await ctx.new_page()
             try:
-                dp = await ctx.new_page()
                 await dp.goto(full_url, wait_until="domcontentloaded", timeout=20000)
                 await asyncio.sleep(3)
+            except Exception as e:
+                print(f"  [{idx+1}/{len(urls)}] ✗ {e!s}", flush=True)
+                await dp.close()
+                continue
+            try:
                 data = await dp.evaluate(DETAIL_PARSE_JS)
                 # 点击短视频带货tab(用坐标点击, dispatchEvent对channel-tab不生效)
                 sv_tab = await dp.evaluate("""() => {
@@ -521,9 +526,10 @@ async def pass2():
                     all_talents[orig_idx][k] = v
                 all_talents[orig_idx]['roomId'] = room_id
                 all_talents[orig_idx]['imLink'] = f'https://store.weixin.qq.com/shop/kf/collab/im?mode=business&roomId={room_id}' if room_id else ''
-                await dp.close()
             except Exception as e:
                 print(f"  [{idx+1}/{len(urls)}] ✗ {str(e)[:50]}", end='', flush=True)
+            finally:
+                await dp.close()
             if (idx + 1) % 10 == 0:
                 with open(TEMP_JSON, 'w') as f:
                     json.dump(all_talents, f, ensure_ascii=False)

@@ -32,9 +32,8 @@ STATE_PATH = os.path.join(SKILL_DIR, '..', '..', 'assets', 'weixin_store_state.j
 - **Save JSON backup** before generating Excel (resume from breakpoint)
 - **Progress files** in temp dir (via `get_temp_file()`) for resumption
 - **Long-running jobs** use background mode with `notify_on_complete=True`, then send WeChat DM completion notification to `weixin:o9cq807VdcwVNBW2iw06V0elNJUM@im.wechat`
-- **Excel output has fixed 41-column layout** — 带货类目 split into 带货类目1/2/3 (最多3个). 列序固定：头像, 昵称, 带货类目1, 带货类目2, 带货类目3, 评分, 粉丝数(列表), 带货销售总额, 短视频销售额, 回复率高, 有认证, 可开发票, 达人详情链接, 总销量, 跟买人数, 回头客, 品类占比, 带货销售额, 客单价, 粉丝数带货概览, 直播占比, 粉丝性别, 粉丝年龄, 粉丝地域, 粉丝人群类别, 粉丝购物偏好, 购买力区间, 带货渠道, 直播销售额, 场均成交额, 场均观看人数, 总带货场次, 直播明细, 视频销售额, 条均成交额, 条均点赞数, 总带货条数, 短视频明细, 微信号, 手机号, im链接
-  `save_excel()` in both templates uses a hardcoded HEADERS list + explicit values mapping dict, not dynamic dict keys.
-- **Contact filter** — `FILTER_HAS_CONTACT = True/False` 是否筛选有联系方式（默认关闭）
+- **Contact filter** — `FILTER_HAS_CONTACT = True/False` 是否筛选有联系方式（**默认开启**）。重要：pass1 开启此选项后，列表页只显示已公开联系方式的达人，pass2 才能捕获到 roomId，pass3 才能提取到联系方式。关闭此选项会导致 pass3 大量 "暂无联系方式"（实测差异：开启后 10/10 条全部有联系方式，关闭后 0/10）。联系方式不能通过正则从全页文本提取（会误抓左侧会话列表中的其他微信号），只能依靠 pass3 的 `.contact-popover` 流程。
+- **Excel output has fixed 41-column layout**
 
 ## Windows Compatibility
 
@@ -103,7 +102,7 @@ Scrape talents from `store.weixin.qq.com/shop/findersquare/find`. The page uses 
   - Pass 3 = batch open `collab/im?roomId={roomId}` pages → click matching session by `[data-room-id]` → click "查看联系方式" → extract 微信号+手机号 from `.contact-popover__item` only (NO regex fallback on full page text!)
 - **Detail fields (41 columns)**: sorted as: 头像, 昵称, 带货类目1/2/3(列表页拆3列), 评分, 粉丝数(列表), 带货销售总额, 短视频销售额, 回复率高, 有认证, 可开发票, 达人详情链接, 总销量, 跟买人数, 回头客, 品类占比, 带货销售额, 客单价, 粉丝数带货概览, 直播占比, 粉丝性别, 粉丝年龄, 粉丝地域, 粉丝人群类别, 粉丝购物偏好, 购买力区间, 带货渠道, 直播销售额, 场均成交额, 场均观看人数, 总带货场次, 直播明细, 视频销售额, 条均成交额, 条均点赞数, 总带货条数, 短视频明细, 微信号, 手机号, im链接
 - Category filtering via UI checkbox toggle (not API topCatId — quality is poor)
-- **Contact filter** — `FILTER_HAS_CONTACT = True/False` 是否筛选有联系方式（默认关闭）
+- **Contact filter** — `FILTER_HAS_CONTACT = True/False` 是否筛选有联系方式（**默认开启**）。参见 Shared User Preferences 中的说明：开启后 pass1 只采集已公开联系方式的达人，确保 pass3 能提取到联系方式。
 - Pagination via native value setter on input box + 跳转 button
 - dispatchEvent preferred for Vue v-model interactions (checkboxes, dropdowns), but page.mouse.click required for channel tabs (直播带货/短视频带货) and dialog confirm buttons (导出弹窗等)
 - Page was redesigned 2026-05-12 (new card grid layout)
@@ -128,8 +127,7 @@ Scrape talents from `store.weixin.qq.com/shop/findersquare/find`. The page uses 
 | `references/talent-square/pagination-investigation-20260511.md` | Pagination failure investigation |
 | `references/talent-square/resume-scrape.md` | Detail scrape resume instructions |
 | `references/talent-square/session-20260511.md` | May 2026 page state snapshot |
-| `references/talent-square/content-extension-dom-patterns.md` | Chrome extension DOM extraction patterns & field-adding workflow |
-| `references/talent-square/contact-extraction.md` | Pass3 collab/im page DOM structure & contact extraction flow |
+| `references/talent-square/content-extension-dom-patterns.md` | Chrome extension DOM extraction patterns & field-adding workflow |\n| `references/talent-square/contact-extraction.md` | Pass3 collab/im page DOM structure & contact extraction flow |\n| `references/talent-square/three-pass-contact-filter-workflow.md` | Three-pass workflow: why FILTER_HAS_CONTACT must be True, 10/10 verified |
 
 ### Template Files
 
@@ -216,7 +214,9 @@ Export promoter/agency lists from `store.weixin.qq.com/shop/shopleague/coop-mana
 16. **联系方式 roomId 捕获 (Pass2)** — 详情页的"联系"按钮用 Vue 绑定, dispatchEvent 无效。必须用 `page.mouse.click()` 配合坐标, 且必须用 `ctx.on('page')` 监听 popup (page.on('popup') 不可靠)。无"联系"按钮的达人: 超时后静默跳过, 不报错。
 17. **Pass3 必须先点左侧会话** — 直接打开 `collab/im?roomId=X` 不会自动选中该会话。必须用 `[data-room-id]` 找到匹配的 `LI.session-item-container` 并 click(), 等待5s加载右侧面板, 再点击 contact-link。
 18. **联系方式只能从 contact-popover 提取** — 禁止在全页文本中用正则搜索微信号。collab/im 页面左侧会话列表包含大量非当前达人的微信号 (如"jackey"), 正则会误抓。只从 `.contact-popover__title`(含"带货者联系方式") + `.contact-popover__value` 提取。
-19. **每日查看次数上限** — 微信小店对商家每天查看达人联系方式的次数有限制。检测到"今天查看达人联系方式次数已达上限"时跳过(skip=True), 不修改数据, 次日重新跑。
+22. **每日查看次数上限** — 微信小店对商家每天查看达人联系方式的次数有限制。检测到"今天查看达人联系方式次数已达上限"时跳过(skip=True), 不修改数据, 次日重新跑。
+23. **页面泄漏 → EPIPE 崩溃** — 所有模板在循环中使用 `ctx.new_page()` 后必须关闭页面。未关闭的页面会累积占用浏览器内存，Python 3.9 + Playwright 在 macOS 上 ~8-10 个页面后会崩溃报 `write EPIPE`。修复：用 `try/finally` 或 `try/finally/close()` 保证每个 page 关闭。已在 `scrape_pass3_contact.py` 和 `scrape_v11_onepass.py` 中修复（2026-06-21 pass3 测试验证通过），其他模板如 `scrape_all_34.py`、`resume_detail_scrape.py` 也应检查。
+24. **增量保存防止 EPIPE 数据丢失** — 由于 pitfall #23 的 EPIPE 崩溃会中断长时间运行的任务，所有循环采集模板必须**每条处理完后立即增量保存到 TEMP_JSON**（不仅仅是缓存文件）。崩溃后重新运行会自动跳过已处理的条目。在 `scrape_pass3_contact.py` 中已实现（每条联系方式提取后立即保存），`scrape_v11_onepass.py` pass2 也应实现此模式。
 20. **Excel输出必须是41列固定顺序** — 带货类目必须按 `,` split 后填入3列(带货类目1/2/3)。参见 `references/talent-square/detail-fields-36cols.md`。两个模板的 `save_excel()` 均使用硬编码 HEADERS + vals 字典, 不是动态 dict keys。
 21. **`document.body.innerText` fallback for getText failures** — `DETAIL_PARSE_JS` 使用遍历 shadow DOM childNodes 的 `getText()` 函数, 但某些页面结构下只返回 1 行文本导致所有字段为空。修复: 先在 `DETAIL_PARSE_JS` 和 `sv_data evaluate` 两处用 `getText(shadowRoot.body)`, 若结果行数 <10 则 fallback 到 `document.body.innerText`。
 22. **短视频明细 9行/组解析** — 短视频明细表实际结构为9行一组，不是4行:
@@ -235,3 +235,5 @@ Export promoter/agency lists from `store.weixin.qq.com/shop/shopleague/coop-mana
     校验: 第2行(i+1)必须是日期格式 `YYYY/MM/DD`, 第4行(i+3)必须是数字。
     使用 `i += 9` 跳跃, 不是 i += 4。仅在 `sv_data` evaluate 块中修改（DETAIL_PARSE_JS 不包含短视频明细解析）。
 23. **联系方式进度缓存** — pass3 进度保存在 `weixin_contact_progress.json` (temp dir), 支持断点续爬。重新爬取前需手动删除该文件和清除 JSON 中的微信号/手机号字段。
+24. **PASS1必须筛选有联系方式才能保证PASS3全部提取成功** — 如果 PASS1 不勾选 `FILTER_HAS_CONTACT`，采集的所有达人在 PASS3 中会有大量"暂无联系方式"。正确流程: PASS1 勾选 `FILTER_HAS_CONTACT = True` 只采集已公开联系方式的达人 → PASS2 点击"联系"按钮捕获 roomId → PASS3 打开 collab/im 提取微信号+手机号。此时 PASS3 应 100% 成功，不再出现"暂无联系方式"。
+25. **EPIPE 崩溃 + 增量保存** — Python 3.9 + Playwright 在连续打开大量页面后(约16页)会触发 Node.js EPIPE 崩溃。两个模板均已添加: (a) `page.close()` 每个页面处理完立刻关闭; (b) 每条数据增量保存到 TEMP_JSON，崩溃后重新运行可从已有 roomId 继续。
