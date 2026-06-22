@@ -48,6 +48,13 @@ async def extract_contact(page, room_id, nickname):
         await page.goto(url, wait_until='domcontentloaded', timeout=20000)
         await asyncio.sleep(5)
 
+        # ⚠️ 检测会话是否过期（页面跳转到了登录页）
+        body_text = await page.evaluate("document.body.innerText") or ""
+        if "登录" in body_text and ("扫码" in body_text or "二维码" in body_text):
+            print(f"\n  {nickname}: ❌ 会话已过期！页面跳转到登录页", flush=True)
+            print(f"   请重新扫码登录并更新 assets/weixin_store_state.json", flush=True)
+            return '', '', 'SESSION_EXPIRED'
+
         # 第一步: 点击左侧会话列表匹配的会话，加载右侧面板
         await page.evaluate(f"""((rid) => {{
             const items = document.querySelectorAll('[data-room-id]');
@@ -124,7 +131,10 @@ async def extract_contact(page, room_id, nickname):
         return wechat, phone, skip
 
     except Exception as e:
-        print(f"  {nickname}: ✗ {str(e)[:60]}", flush=True)
+        estr = str(e)
+        print(f"  {nickname}: ✗ {estr[:80]}", flush=True)
+        if "Timeout" in estr and "5000" in estr:
+            return '', '', 'SESSION_EXPIRED'
         return '', '', False
 
 
@@ -195,6 +205,9 @@ async def main():
             finally:
                 await page.close()
             if skip:
+                if skip == 'SESSION_EXPIRED':
+                    print("❌ 会话已过期，终止采集", flush=True)
+                    break
                 continue
             t['微信号'] = wechat
             t['手机号'] = phone

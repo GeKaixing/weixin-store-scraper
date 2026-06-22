@@ -89,6 +89,13 @@ def fetch_all_products(headers):
         }
         resp = requests.post(API_URL, json=body, headers=headers, timeout=30)
         data = resp.json()
+        
+        # 检测会话过期
+        if resp.status_code == 403 or data.get('respStatusCode') == 200004:
+            print(f"\n❌ 登录态已过期！返回: {data.get('msg', resp.text[:100])}", flush=True)
+            print(f"   请重新扫码登录并更新 assets/weixin_store_state.json\n", flush=True)
+            return all_products or None
+        
         products = data.get('productList', [])
         if not products:
             print(f"  ❌ 第{page}页: 无响应数据", flush=True)
@@ -177,6 +184,9 @@ def main():
     headers = get_auth_headers()
     print("开始采集全部商品...", flush=True)
     products = fetch_all_products(headers)
+    if products is None:
+        print("❌ 登录态过期，终止采集", flush=True)
+        return
     if not products:
         print("❌ 未采集到任何商品，请检查登录态是否过期", flush=True)
         return
