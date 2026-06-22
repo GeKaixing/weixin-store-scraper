@@ -1,10 +1,21 @@
 
-import os
-import tempfile
+import os, sys, tempfile
+
 def get_temp_file(filename):
+    \"\"\"跨平台临时文件路径\"\"\"
     return os.path.join(tempfile.gettempdir(), filename)
+
 def get_desktop_path(sub_dir=None):
-    base = os.path.join(os.path.expanduser("~"), "Desktop")
+    \"\"\"跨平台桌面路径 (macOS/Windows/Linux)\"\"\"
+    home = os.path.expanduser("~")
+    if sys.platform == 'darwin':
+        base = os.path.join(home, "Desktop")
+    elif sys.platform == 'win32':
+        base = os.path.join(home, "Desktop")
+    else:
+        base = os.environ.get('XDG_DESKTOP_DIR', os.path.join(home, "Desktop"))
+    if not os.path.exists(base):
+        base = home
     return os.path.join(base, sub_dir) if sub_dir else base
 
 from playwright.sync_api import sync_playwright
@@ -162,7 +173,7 @@ for col in ws.columns:
             max_len = max(max_len, len(str(cell.value)))
     ws.column_dimensions[col_letter].width = min(max_len + 4, 60)
 
-output_path = 'get_desktop_path() + os.sep带货机构列表.xlsx'
+output_path = get_desktop_path('带货机构列表(含详情).xlsx')
 wb.save(output_path)
 print(f"📁 Excel: {output_path}")
 print(f"📁 JSON (progress): {progress_path}")

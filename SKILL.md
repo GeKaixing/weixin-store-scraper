@@ -35,21 +35,44 @@ STATE_PATH = os.path.join(SKILL_DIR, '..', '..', 'assets', 'weixin_store_state.j
 - **Contact filter** — `FILTER_HAS_CONTACT = True/False` 是否筛选有联系方式（**默认开启**）。重要：pass1 开启此选项后，列表页只显示已公开联系方式的达人，pass2 才能捕获到 roomId，pass3 才能提取到联系方式。关闭此选项会导致 pass3 大量 "暂无联系方式"（实测差异：开启后 10/10 条全部有联系方式，关闭后 0/10）。联系方式不能通过正则从全页文本提取（会误抓左侧会话列表中的其他微信号），只能依靠 pass3 的 `.contact-popover` 流程。
 - **Excel output has fixed 41-column layout**
 
-## Windows Compatibility
+## Cross-Platform Compatibility
 
 All templates include these cross-platform helper functions at the top:
 
 ```python
-import os, tempfile
+import os, tempfile, sys
+
 def get_temp_file(filename):
+    \"\"\"跨平台临时文件路径\"\"\"
     return os.path.join(tempfile.gettempdir(), filename)
+
 def get_desktop_path(sub_dir=None):
-    base = os.path.join(os.path.expanduser("~"), "Desktop")
+    \"\"\"跨平台桌面路径 (macOS/Windows/Linux)\"\"\"
+    home = os.path.expanduser("~")
+    if sys.platform == 'darwin':       # macOS
+        base = os.path.join(home, "Desktop")
+    elif sys.platform == 'win32':      # Windows
+        base = os.path.join(home, "Desktop")
+    else:                               # Linux (XDG 约定)
+        base = os.environ.get('XDG_DESKTOP_DIR',
+                              os.path.join(home, "Desktop"))
+    if not os.path.exists(base):
+        base = home  # 回退到用户目录
     return os.path.join(base, sub_dir) if sub_dir else base
+
+def get_platform_ua():
+    \"\"\"跨平台 User-Agent\"\"\"
+    if sys.platform == 'darwin':
+        return 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
+    elif sys.platform == 'win32':
+        return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    else:
+        return 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36'
 ```
 
-- **`get_temp_file(name)`** — returns platform temp path (Windows: `C:\Users\<user>\AppData\Local\Temp\name`, macOS/Linux: `/tmp/name`)
-- **`get_desktop_path(sub_dir)`** — returns Desktop path regardless of OS
+- **`get_temp_file(name)`** — returns platform temp path (Windows: `C:\\Users\\<user>\\AppData\\Local\\Temp\\name`, macOS/Linux: `/tmp/name`)
+- **`get_desktop_path(sub_dir)`** — returns Desktop path (macOS: `~/Desktop`, Windows: `~/Desktop`, Linux: `$XDG_DESKTOP_DIR` or `~/Desktop`, fallback to `~` when Desktop doesn't exist)
+- **`get_platform_ua()`** — returns a platform-specific User-Agent string for HTTP requests
 - **`STATE_PATH`** — resolved relative to skill `assets/` directory, not hardcoded
 
 ## Shared Patterns
@@ -262,3 +285,4 @@ Export promoter/agency lists from `store.weixin.qq.com/shop/shopleague/coop-mana
 23. **联系方式进度缓存** — pass3 进度保存在 `weixin_contact_progress.json` (temp dir), 支持断点续爬。重新爬取前需手动删除该文件和清除 JSON 中的微信号/手机号字段。
 24. **PASS1必须筛选有联系方式才能保证PASS3全部提取成功** — 如果 PASS1 不勾选 `FILTER_HAS_CONTACT`，采集的所有达人在 PASS3 中会有大量"暂无联系方式"。正确流程: PASS1 勾选 `FILTER_HAS_CONTACT = True` 只采集已公开联系方式的达人 → PASS2 点击"联系"按钮捕获 roomId → PASS3 打开 collab/im 提取微信号+手机号。此时 PASS3 应 100% 成功，不再出现"暂无联系方式"。
 25. **EPIPE 崩溃 + 增量保存** — Python 3.9 + Playwright 在连续打开大量页面后(约16页)会触发 Node.js EPIPE 崩溃。两个模板均已添加: (a) `page.close()` 每个页面处理完立刻关闭; (b) 每条数据增量保存到 TEMP_JSON，崩溃后重新运行可从已有 roomId 继续。
+26. **商品列表 API 需要 biz_magic 请求头** — 不同于达人广场/机构广场的 Playwright 驱动方式，商品列表 (`scanProductPreview`) 使用 requests 直接调用 API。认证依赖 `biz_magic` 请求头（值从 `weixin_store_state.json` 的 cookies 中提取。尝试用 `page.request.post()` 或裸 `fetch` 不带 `biz_magic` 头会返回 403 `"biz magic invalid"`。修复：从 storage_state cookies 中取 `biz_magic` 值，加到 headers 字典中。
